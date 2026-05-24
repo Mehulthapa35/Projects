@@ -1,0 +1,593 @@
+import tkinter as tk
+from tkinter import ttk
+from tkinter import messagebox # For Prompt Messages
+import sqlite3 #To create connection between database and exchange information
+import random #For Invoice and Transaction ID
+import string
+from datetime import datetime #to use date and time function
+
+# Creating and connecting to the database
+conn = sqlite3.connect('stationery.db')
+c = conn.cursor()
+
+# Creating table for customer details if not exists
+c.execute('''CREATE TABLE IF NOT EXISTS customers (
+             username TEXT PRIMARY KEY,
+             password TEXT,
+             name TEXT,
+             company_name TEXT,
+             email TEXT,
+             contact_no TEXT,
+             billing_address TEXT,
+             country TEXT,
+             state TEXT)''')
+
+# Creating table for stationery items if not exists
+c.execute('''CREATE TABLE IF NOT EXISTS items (
+             item_id INTEGER PRIMARY KEY,
+             item_name TEXT,
+             unit_price REAL)''')
+
+# Creating table for cart items
+c.execute('''CREATE TABLE IF NOT EXISTS cart (
+             cart_id INTEGER PRIMARY KEY AUTOINCREMENT,
+             username TEXT,
+             item_id INTEGER,
+             item_name TEXT,
+             unit_price REAL,
+             quantity INTEGER)''')
+## Creating table for admin details if not exists
+c.execute('''CREATE TABLE IF NOT EXISTS admins (
+             username TEXT PRIMARY KEY,
+             password TEXT)''')
+# Creating table for audit log if not exists
+c.execute('''CREATE TABLE IF NOT EXISTS audit_log (
+             id INTEGER PRIMARY KEY,
+             action TEXT,
+             item_name TEXT,
+             unit_price REAL,
+             date TEXT,
+             time TEXT)''')
+# Setting up the CUBS Stationery Items List
+c.execute("SELECT COUNT(*) FROM items")
+if c.fetchone()[0] == 0:
+    sample_items = [
+        ('Pen_Black', 0.80),
+        ('Pen_Red', 0.90),
+        ('Pen_Blue', 0.95),
+        ('Pencil_HB', 0.50),
+        ('Pencil_2B', 0.55),
+        ('Notebook_A4', 1.50),
+        ('Notebook_A5', 1.20),
+        ('Stapler', 2.50),
+        ('Staples_Box', 1.00),
+        ('Eraser_Large', 0.75),
+        ('Ruler_30cm', 0.60),
+        ('Scissors', 1.80),
+        ('Highlighter_Yellow', 1.00),
+        ('Calculator', 5.00),
+        ('Glue_Stick', 1.20),
+        ('Tape_Dispenser', 3.00),
+        ('Whiteboard_Marker_Black', 1.50),
+        ('File_Organizer', 4.50),
+        ('Notebook_A3', 2.00),
+        ('Binder_Clips_Pack_of_10', 0.90)
+    ]
+    c.executemany("INSERT INTO items (item_name, unit_price) VALUES (?, ?)", sample_items)
+    conn.commit()
+#To store the data for Audit Log
+def add_audit_log(action, item_name, unit_price):
+    try:
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        current_time = datetime.now().strftime("%H:%M:%S")
+        unit_price = float(unit_price)  # Convert unit price to float
+        c.execute("INSERT INTO audit_log (action, item_name, unit_price, date, time) VALUES (?, ?, ?, ?, ?)",
+                  (action, item_name, unit_price, current_date, current_time))
+        conn.commit()
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to log audit entry: {str(e)}")
+
+# Function to validate login credentials and differentiate between customer and admins
+def validate_login(username_entry, password_entry, admin=False):
+    username = username_entry.get()
+    password = password_entry.get()
+    if admin:
+        c.execute("SELECT * FROM admins WHERE username = ? AND password = ?", (username, password))
+        if c.fetchone():
+            login_status_label.config(text="Admin login successful!")
+            open_admin_dashboard(username)
+        else:
+            login_status_label.config(text="Invalid admin username or password")
+    else:
+        c.execute("SELECT * FROM customers WHERE username = ? AND password = ?", (username, password))
+        if c.fetchone():
+            login_status_label.config(text="Customer login successful!")
+            open_customer_dashboard(username)
+        else:
+            login_status_label.config(text="Invalid customer username or password")
+
+# Admin username and password
+admin_username = "mehul"
+admin_password = "thapa"
+
+
+# Function to create a new account for the first time customer
+def create_account_window():
+    create_account_window = tk.Toplevel(root)
+    create_account_window.title("Create Account")
+
+    # Labels and Entries for user details
+    ttk.Label(create_account_window, text="Username:").grid(row=0, column=0, padx=5, pady=5)
+    username_entry_new = ttk.Entry(create_account_window)
+    username_entry_new.grid(row=0, column=1, padx=5, pady=5)
+
+    ttk.Label(create_account_window, text="Password:").grid(row=1, column=0, padx=5, pady=5)
+    password_entry_new = ttk.Entry(create_account_window, show="*")
+    password_entry_new.grid(row=1, column=1, padx=5, pady=5)
+
+    ttk.Label(create_account_window, text="Name:").grid(row=2, column=0, padx=5, pady=5)
+    name_entry_new = ttk.Entry(create_account_window)
+    name_entry_new.grid(row=2, column=1, padx=5, pady=5)
+
+    ttk.Label(create_account_window, text="Company Name:").grid(row=3, column=0, padx=5, pady=5)
+    company_name_entry = ttk.Entry(create_account_window)
+    company_name_entry.grid(row=3, column=1, padx=5, pady=5)
+
+    ttk.Label(create_account_window, text="Email:").grid(row=4, column=0, padx=5, pady=5)
+    email_entry = ttk.Entry(create_account_window)
+    email_entry.grid(row=4, column=1, padx=5, pady=5)
+
+    ttk.Label(create_account_window, text="Contact No:").grid(row=5, column=0, padx=5, pady=5)
+    contact_no_entry = ttk.Entry(create_account_window)
+    contact_no_entry.grid(row=5, column=1, padx=5, pady=5)
+
+    ttk.Label(create_account_window, text="Billing Address:").grid(row=6, column=0, padx=5, pady=5)
+    billing_address_entry = ttk.Entry(create_account_window)
+    billing_address_entry.grid(row=6, column=1, padx=5, pady=5)
+
+    ttk.Label(create_account_window, text="Country:").grid(row=7, column=0, padx=5, pady=5)
+    country_var = tk.StringVar(create_account_window)
+    country_dropdown = ttk.Combobox(create_account_window, textvariable=country_var, state="readonly")
+    country_dropdown['values'] = ('Ireland', 'Germany', 'USA')
+    country_dropdown.grid(row=7, column=1, padx=5, pady=5)
+
+    ttk.Label(create_account_window, text="State:").grid(row=8, column=0, padx=5, pady=5)
+    state_var = tk.StringVar(create_account_window)
+    state_dropdown = ttk.Combobox(create_account_window, textvariable=state_var, state="readonly")
+    state_dropdown.grid(row=8, column=1, padx=5, pady=5)
+
+    # Function to update state dropdown based on selected country
+    def update_state_dropdown(event):
+        selected_country = country_var.get()
+        if selected_country == 'USA':
+            state_dropdown['values'] = ('Texas', 'California')
+        elif selected_country == 'Ireland':
+            state_dropdown['values'] = ('Dublin', 'Cork', 'Galway', 'Limerick')
+        elif selected_country == 'Germany':
+            state_dropdown['values'] = ('Berlin', 'Hamburg', 'Munich', 'Cologne') 
+    country_dropdown.bind("<<ComboboxSelected>>", update_state_dropdown)
+
+    # Button to create account
+    create_button = ttk.Button(create_account_window, text="Create Account",
+                                command=lambda: save_new_account(username_entry_new.get(), password_entry_new.get(),
+                                                                  name_entry_new.get(), company_name_entry.get(),
+                                                                  email_entry.get(), contact_no_entry.get(),
+                                                                  billing_address_entry.get(), country_var.get(),
+                                                                  state_var.get(), create_account_window))
+    create_button.grid(row=9, column=0, columnspan=2, pady=5)
+
+# Function to save new account details if there is a new customer login
+def save_new_account(username, password, name, company_name, email, contact_no, billing_address, country, state, window):
+    c.execute("INSERT INTO customers (username, password, name, company_name, email, contact_no, billing_address, country, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              (username, password, name, company_name, email, contact_no, billing_address, country, state))
+    conn.commit()
+    messagebox.showinfo("Account Created", "Account created successfully!")
+    window.destroy()
+    open_customer_dashboard(username)
+#Display the customer dashboard
+def open_customer_dashboard(username):
+    customer_dashboard_window = tk.Toplevel(root)
+    customer_dashboard_window.title("Customer Dashboard")
+
+    def enable_invoice_button():
+        invoice_button.config(state="normal")
+
+    def disable_invoice_button():
+        invoice_button.config(state="disabled")
+#If the cart has items Invoice button is enabled
+    def check_cart():
+        c.execute("SELECT COUNT(*) FROM cart WHERE username=?", (username,))
+        cart_count = c.fetchone()[0]
+        if cart_count > 0:
+            enable_invoice_button()
+        else:
+            disable_invoice_button()
+
+    # My Profile Button
+    ttk.Button(customer_dashboard_window, text="My Profile", command=lambda: open_profile_window(username)).pack(pady=5)
+
+    # Stationery Items Button
+    ttk.Button(customer_dashboard_window, text="Stationery Items", command=lambda: open_stationery_window(username)).pack(pady=5)
+
+    # My Cart Button
+    ttk.Button(customer_dashboard_window, text="My Cart", command=lambda: open_cart_window(username)).pack(pady=5)
+
+    # Invoice button with integrated invoice generation code
+    invoice_button = ttk.Button(customer_dashboard_window, text="Invoice", command=lambda: generate_invoice(username, conn, c))
+    invoice_button.pack()
+
+    check_cart()
+
+    
+# Function to open the profile window if customer wants to update
+def open_profile_window(username):
+    def save_profile():
+        new_name = name_entry.get()
+        new_company_name = company_name_entry.get()
+        new_email = email_entry.get()
+        new_contact_no = contact_no_entry.get()
+        new_billing_address = billing_address_entry.get()
+        new_country = country_var.get()
+        new_state = state_var.get()
+        c.execute("UPDATE customers SET name=?, company_name=?, email=?, contact_no=?, billing_address=?, country=?, state=? WHERE username=?",
+                  (new_name, new_company_name, new_email, new_contact_no, new_billing_address, new_country, new_state, username))
+        conn.commit()
+        messagebox.showinfo("Profile Updated", "Profile updated successfully!")
+
+    profile_window = tk.Toplevel(root)
+    profile_window.title("My Profile")
+
+    # Fetch customer details from the database
+    c.execute("SELECT * FROM customers WHERE username=?", (username,))
+    customer_data = c.fetchone()
+
+    # Setting UP to Display customer details
+    ttk.Label(profile_window, text="Username:").grid(row=0, column=0, padx=5, pady=5)
+    ttk.Label(profile_window, text=customer_data[0]).grid(row=0, column=1, padx=5, pady=5)
+
+    ttk.Label(profile_window, text="Name:").grid(row=1, column=0, padx=5, pady=5)
+    name_entry = ttk.Entry(profile_window)
+    name_entry.grid(row=1, column=1, padx=5, pady=5)
+    name_entry.insert(0, customer_data[2])
+
+    ttk.Label(profile_window, text="Company Name:").grid(row=2, column=0, padx=5, pady=5)
+    company_name_entry = ttk.Entry(profile_window)
+    company_name_entry.grid(row=2, column=1, padx=5, pady=5)
+    company_name_entry.insert(0, customer_data[3])
+
+    ttk.Label(profile_window, text="Email:").grid(row=3, column=0, padx=5, pady=5)
+    email_entry = ttk.Entry(profile_window)
+    email_entry.grid(row=3, column=1, padx=5, pady=5)
+    email_entry.insert(0, customer_data[4])
+
+    ttk.Label(profile_window, text="Contact No:").grid(row=4, column=0, padx=5, pady=5)
+    contact_no_entry = ttk.Entry(profile_window)
+    contact_no_entry.grid(row=4, column=1, padx=5, pady=5)
+    contact_no_entry.insert(0, customer_data[5])
+
+    ttk.Label(profile_window, text="Billing Address:").grid(row=5, column=0, padx=5, pady=5)
+    billing_address_entry = ttk.Entry(profile_window)
+    billing_address_entry.grid(row=5, column=1, padx=5, pady=5)
+    billing_address_entry.insert(0, customer_data[6])
+
+    ttk.Label(profile_window, text="Country:").grid(row=6, column=0, padx=5, pady=5)
+    country_var = tk.StringVar(profile_window)
+    country_dropdown = ttk.Combobox(profile_window, textvariable=country_var, state="readonly")
+    country_dropdown['values'] = ('Ireland', 'Germany', 'USA')
+    country_dropdown.grid(row=6, column=1, padx=5, pady=5)
+    country_dropdown.set(customer_data[7])
+
+    ttk.Label(profile_window, text="State:").grid(row=7, column=0, padx=5, pady=5)
+    state_var = tk.StringVar(profile_window)
+    state_dropdown = ttk.Combobox(profile_window, textvariable=state_var, state="readonly")
+    def update_state_dropdown(event):
+        selected_country = country_var.get()
+        if selected_country == 'USA':
+            state_dropdown['values'] = ('Texas', 'California')
+        elif selected_country == 'Ireland':
+            state_dropdown['values'] = ('Dublin', 'Cork', 'Galway', 'Limerick')
+        elif selected_country == 'Germany':
+            state_dropdown['values'] = ('Berlin', 'Hamburg', 'Munich', 'Cologne') 
+    country_dropdown.bind("<<ComboboxSelected>>", update_state_dropdown)
+    state_dropdown.grid(row=7, column=1, padx=5, pady=5)
+    state_dropdown.set(customer_data[8])
+
+    save_button = ttk.Button(profile_window, text="Save", command=save_profile)
+    save_button.grid(row=8, columnspan=2, pady=5)
+#List of Cubs Stationery Items
+def open_stationery_window(username):
+    def add_to_cart(item_id, item_name, unit_price, quantity):
+        quantity = int(quantity)
+        c.execute("INSERT INTO cart (username, item_id, item_name, unit_price, quantity) VALUES (?, ?, ?, ?, ?)",
+                  (username, item_id, item_name, unit_price, quantity))
+        conn.commit()
+        messagebox.showinfo("Success", "Item added to cart successfully")
+
+    stationery_window = tk.Toplevel(root)
+    stationery_window.title("Stationery Items")
+
+    c.execute("SELECT * FROM items")
+    items_data = c.fetchall()
+
+    ttk.Label(stationery_window, text="Item Name").grid(row=0, column=0, padx=5, pady=5)
+    ttk.Label(stationery_window, text="Unit Price").grid(row=0, column=1, padx=5, pady=5)
+    ttk.Label(stationery_window, text="Quantity").grid(row=0, column=2, padx=5, pady=5)
+
+    for i, item in enumerate(items_data, start=1):
+        ttk.Label(stationery_window, text=item[1]).grid(row=i, column=0, padx=5, pady=5)
+        ttk.Label(stationery_window, text=item[2]).grid(row=i, column=1, padx=5, pady=5)
+        entry = ttk.Entry(stationery_window)
+        entry.grid(row=i, column=2, padx=5, pady=5)
+        add_to_cart_button = ttk.Button(stationery_window, text="Add to Cart",
+                                        command=lambda item_id=item[0], item_name=item[1], unit_price=item[2], entry=entry:
+                                        add_to_cart(item_id, item_name, unit_price, entry.get()))
+        add_to_cart_button.grid(row=i, column=3, padx=5, pady=5)
+#Display My Cart of the current customer
+def open_cart_window(username):
+    def remove_item(cart_id):
+        c.execute("DELETE FROM cart WHERE cart_id=?", (cart_id,))
+        conn.commit()
+        messagebox.showinfo("Success", "Item removed from cart successfully")
+        open_cart_window(username)
+
+    def go_back():
+        cart_window.destroy()
+        open_customer_dashboard(username)
+
+    cart_window = tk.Toplevel(root)
+    cart_window.title("My Cart")
+
+    c.execute("SELECT * FROM cart WHERE username=?", (username,))
+    cart_items = c.fetchall()
+
+    ttk.Label(cart_window, text="Item Name").grid(row=0, column=0, padx=5, pady=5)
+    ttk.Label(cart_window, text="Unit Price").grid(row=0, column=1, padx=5, pady=5)
+    ttk.Label(cart_window, text="Quantity").grid(row=0, column=2, padx=5, pady=5)
+    ttk.Label(cart_window, text="Total Price").grid(row=0, column=3, padx=5, pady=5)
+    ttk.Label(cart_window, text="Remove Item").grid(row=0, column=4, padx=5, pady=5)
+
+    grand_total = 0
+    if cart_items:
+        for i, item in enumerate(cart_items, start=1):
+            ttk.Label(cart_window, text=item[3]).grid(row=i, column=0, padx=5, pady=5)
+            ttk.Label(cart_window, text=item[4]).grid(row=i, column=1, padx=5, pady=5)
+            ttk.Label(cart_window, text=item[5]).grid(row=i, column=2, padx=5, pady=5)
+            total_price = item[4] * item[5]
+            ttk.Label(cart_window, text=total_price).grid(row=i, column=3, padx=5, pady=5)
+            ttk.Button(cart_window, text="Remove", command=lambda cart_id=item[0]: remove_item(cart_id)).grid(row=i, column=4, padx=5, pady=5)
+            grand_total += total_price
+
+        ttk.Label(cart_window, text="Grand Total:").grid(row=len(cart_items)+1, column=3, padx=5, pady=5)
+        ttk.Label(cart_window, text=grand_total).grid(row=len(cart_items)+1, column=4, padx=5, pady=5)
+
+    else:
+        ttk.Label(cart_window, text="Your cart is empty!", font=("Arial", 12)).grid(row=1, column=0, columnspan=5, padx=5, pady=5)
+
+    ttk.Button(cart_window, text="Okay", command=go_back).grid(row=len(cart_items)+4, column=2, columnspan=5, pady=5)
+#To generate Invoice for the custometr
+def generate_invoice(username, conn, c):
+    # Fetch customer details from the profile
+    c.execute("SELECT * FROM customers WHERE username=?", (username,))
+    customer_data = c.fetchone()
+
+    # Fetch cart items from the database
+    c.execute("SELECT * FROM cart WHERE username=?", (username,))
+    cart_items = c.fetchall()
+
+    # Create a new window for the invoice
+    invoice_window = tk.Toplevel()
+    invoice_window.title("Invoice")
+
+    # Create a frame to hold the invoice details
+    invoice_frame = ttk.Frame(invoice_window)
+    invoice_frame.pack(padx=10, pady=10)
+
+    # Generate automated invoice number
+    invoice_number = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
+    # Generate random transaction ID
+    transaction_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+
+    # Invoice heading with date and time
+    current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    invoice_heading_text = f"CUBS Stationery Ltd\nAddress for reference: UCC Cork\nEmail: 123114067@umail.ucc.ie\nPhn: +353 899833445\n\n"
+    invoice_heading_text += f"Invoice Number: {invoice_number}\n"
+    invoice_heading_text += f"Transaction ID: {transaction_id}\n"
+    invoice_heading_text += f"Date and Time: {current_datetime}\n\n"
+
+    # Display the invoice heading
+    invoice_heading = ttk.Label(invoice_frame, text=invoice_heading_text, font=('Arial', 12, 'bold'), justify='center')
+    invoice_heading.grid(row=1, column=0, columnspan=4, sticky='w', pady=5)
+
+    # Customer Details
+    ttk.Label(invoice_frame, text="Customer Details", font=('Arial', 12, 'bold')).grid(row=2, column=0, columnspan=4, sticky='w', pady=5)
+    ttk.Label(invoice_frame, text=f"Name: {customer_data[2]}").grid(row=3, column=0, sticky='w', pady=2)
+    ttk.Label(invoice_frame, text=f"Email: {customer_data[4]}").grid(row=4, column=0, sticky='w', pady=2)
+    ttk.Label(invoice_frame, text=f"Contact No: {customer_data[5]}").grid(row=5, column=0, sticky='w', pady=2)
+    ttk.Label(invoice_frame, text=f"Billing Address: {customer_data[6]}").grid(row=6, column=0, sticky='w', pady=2)
+
+    # Cart Items
+    ttk.Label(invoice_frame, text="Cart Items", font=('Arial', 12, 'bold')).grid(row=7, column=0, columnspan=4, sticky='w', pady=5)
+    ttk.Label(invoice_frame, text="Item Name", font=('Arial', 10, 'bold')).grid(row=8, column=0, sticky='w', pady=2)
+    ttk.Label(invoice_frame, text="Unit Price", font=('Arial', 10, 'bold')).grid(row=8, column=1, sticky='w', pady=2)
+    ttk.Label(invoice_frame, text="Quantity", font=('Arial', 10, 'bold')).grid(row=8, column=2, sticky='w', pady=2)
+    ttk.Label(invoice_frame, text="Total Price", font=('Arial', 10, 'bold')).grid(row=8, column=3, sticky='w', pady=2)
+
+    grand_total = 0
+    row_num = 9
+    for item in cart_items:
+        total_price = item[4] * item[5]
+        ttk.Label(invoice_frame, text=item[3]).grid(row=row_num, column=0, sticky='w', pady=2)
+        ttk.Label(invoice_frame, text=f"{item[4]:.2f}").grid(row=row_num, column=1, sticky='w', pady=2)
+        ttk.Label(invoice_frame, text=item[5]).grid(row=row_num, column=2, sticky='w', pady=2)
+        ttk.Label(invoice_frame, text=f"{total_price:.2f}").grid(row=row_num, column=3, sticky='w', pady=2)
+        grand_total += total_price
+        row_num += 1
+
+    # To Calculate VAT (tax) based on country
+    vat_rate = 0
+    if customer_data[7] == 'Ireland':
+        vat_rate = 0.23
+    elif customer_data[7] == 'Germany':
+        vat_rate = 0.19
+    elif customer_data[7] == 'USA':
+        if customer_data[8] == 'Texas':
+            vat_rate = 0.0625
+        elif customer_data[8] == 'California':
+            vat_rate = 0.0725
+
+    #To Calculate VAT amount and final total
+    vat_amount = grand_total * vat_rate
+    final_total = grand_total + vat_amount
+
+    # To Display VAT and Final Total
+    ttk.Label(invoice_frame, text="VAT (Tax):", font=('Arial', 10, 'bold')).grid(row=row_num, column=2, sticky='w', pady=5)
+    ttk.Label(invoice_frame, text=f"{vat_amount:.2f}", font=('Arial', 10, 'bold')).grid(row=row_num, column=3, sticky='w', pady=5)
+    row_num += 1
+    ttk.Label(invoice_frame, text="Grand Total (Including VAT):", font=('Arial', 10, 'bold')).grid(row=row_num, column=2, sticky='w', pady=5)
+    ttk.Label(invoice_frame, text=f"{final_total:.2f}", font=('Arial', 10, 'bold')).grid(row=row_num, column=3, sticky='w', pady=5)
+
+    # Clear cart
+    c.execute("DELETE FROM cart WHERE username=?", (username,))
+    conn.commit()
+
+def open_admin_dashboard(username):
+    global admin_dashboard
+    
+    # Destroy the root window to close the login screen
+    root.destroy()
+    
+    # Initialize admin_dashboard as a new Tk instance
+    admin_dashboard = tk.Tk()
+    admin_dashboard.title("Admin Dashboard")
+    
+    # Buttons in the admin dashboard
+    ttk.Button(admin_dashboard, text="Add Item", command=add_item).grid(row=0, column=0, padx=10, pady=10)
+    ttk.Button(admin_dashboard, text="Delete Item", command=delete_item).grid(row=0, column=1, padx=10, pady=10)
+    ttk.Button(admin_dashboard, text="Audit Log", command=view_audit_log).grid(row=0, column=2, padx=10, pady=10)
+    
+    # Keep the admin dashboard window open
+    admin_dashboard.mainloop()
+    # Function to add item
+def add_item():
+    def add_item_to_database():
+        item_name = item_name_entry.get()
+        unit_price = unit_price_entry.get()
+        c.execute("INSERT INTO items (item_name, unit_price) VALUES (?, ?)", (item_name, unit_price))
+        conn.commit()
+        add_audit_log('add item', item_name, unit_price)
+        messagebox.showinfo("Success", "Item added successfully!")
+        add_item_window.destroy()
+
+    add_item_window = tk.Toplevel(admin_dashboard)
+    add_item_window.title("Add Item")
+
+    ttk.Label(add_item_window, text="Item Name:").grid(row=0, column=0, padx=5, pady=5)
+    item_name_entry = ttk.Entry(add_item_window)
+    item_name_entry.grid(row=0, column=1, padx=5, pady=5)
+
+    ttk.Label(add_item_window, text="Unit Price:").grid(row=1, column=0, padx=5, pady=5)
+    unit_price_entry = ttk.Entry(add_item_window)
+    unit_price_entry.grid(row=1, column=1, padx=5, pady=5)
+
+    add_button = ttk.Button(add_item_window, text="Add", command=add_item_to_database)
+    add_button.grid(row=2, columnspan=2, pady=5)
+
+#Below Function is to delete item
+def delete_item():
+    def confirm_delete(item_id):
+        confirmation = messagebox.askyesno("Confirm", "Are you sure you want to delete this item?")
+        if confirmation:
+            c.execute("DELETE FROM items WHERE item_id=?", (item_id,))
+            conn.commit()
+            add_audit_log('delete item', item_name, unit_price)
+            messagebox.showinfo("Success", "Item deleted successfully!")
+            delete_item_window.destroy()
+
+    delete_item_window = tk.Toplevel(admin_dashboard)
+    delete_item_window.title("Delete Item")
+
+    c.execute("SELECT * FROM items")
+    items = c.fetchall()
+
+    for i, item in enumerate(items):
+        item_id = item[0]
+        item_name = item[1]
+        unit_price = item[2]
+
+        ttk.Label(delete_item_window, text=f"Item: {item_name}, Unit Price: {unit_price}").grid(row=i, column=0, padx=5, pady=5)
+        delete_button = ttk.Button(delete_item_window, text="Delete", command=lambda id=item_id: confirm_delete(id))
+        delete_button.grid(row=i, column=1, padx=5, pady=5)
+
+# Function to view audit log
+def view_audit_log():
+    audit_log_window = tk.Toplevel(admin_dashboard)
+    audit_log_window.title("Audit Log")
+
+    ttk.Label(audit_log_window, text="Action").grid(row=0, column=0, padx=5, pady=5)
+    ttk.Label(audit_log_window, text="Item Name").grid(row=0, column=1, padx=5, pady=5)
+    ttk.Label(audit_log_window, text="Unit Price").grid(row=0, column=2, padx=5, pady=5)
+    ttk.Label(audit_log_window, text="Date").grid(row=0, column=3, padx=5, pady=5)
+    ttk.Label(audit_log_window, text="Time").grid(row=0, column=4, padx=5, pady=5)
+
+    c.execute("SELECT * FROM audit_log")
+    log_entries = c.fetchall()
+
+    for i, entry in enumerate(log_entries, start=1):
+        action = entry[1]
+        item_name = entry[2]
+        unit_price = entry[3]
+        date = entry[4]
+        time = entry[5]
+
+        ttk.Label(audit_log_window, text=action).grid(row=i, column=0, padx=5, pady=5)
+        ttk.Label(audit_log_window, text=item_name).grid(row=i, column=1, padx=5, pady=5)
+        ttk.Label(audit_log_window, text=unit_price).grid(row=i, column=2, padx=5, pady=5)
+        ttk.Label(audit_log_window, text=date).grid(row=i, column=3, padx=5, pady=5)
+        ttk.Label(audit_log_window, text=time).grid(row=i, column=4, padx=5, pady=5)
+
+
+   
+# Main window
+root = tk.Tk()
+root.title("CUBS Stationery Management System")
+
+# Customer Login Frame
+login_frame = ttk.LabelFrame(root, text="Customer Login")
+login_frame.grid(row=0, column=0, padx=10, pady=10)
+
+ttk.Label(login_frame, text="Username:").grid(row=0, column=0, padx=5, pady=5)
+username_entry = ttk.Entry(login_frame)
+username_entry.grid(row=0, column=1, padx=5, pady=5)
+
+ttk.Label(login_frame, text="Password:").grid(row=1, column=0, padx=5, pady=5)
+password_entry = ttk.Entry(login_frame, show="*")
+password_entry.grid(row=1, column=1, padx=5, pady=5)
+
+login_button = ttk.Button(login_frame, text="Login", command=lambda: validate_login(username_entry, password_entry))
+login_button.grid(row=2, columnspan=2, pady=5)
+
+# Create Account Button
+ttk.Button(root, text="Create Account", command=create_account_window).grid(row=1, column=0, pady=10)
+
+# Admin Login Frame
+admin_login_frame = ttk.LabelFrame(root, text="Admin Login")
+admin_login_frame.grid(row=0, column=1, padx=10, pady=10)
+
+ttk.Label(admin_login_frame, text="Username:").grid(row=0, column=0, padx=5, pady=5)
+admin_username_entry = ttk.Entry(admin_login_frame)
+admin_username_entry.grid(row=0, column=1, padx=5, pady=5)
+
+ttk.Label(admin_login_frame, text="Password:").grid(row=1, column=0, padx=5, pady=5)
+admin_password_entry = ttk.Entry(admin_login_frame, show="*")
+admin_password_entry.grid(row=1, column=1, padx=5, pady=5)
+
+# Login button for admin
+login_button_admin = ttk.Button(admin_login_frame, text="Admin Login", command=lambda: validate_login(admin_username_entry, admin_password_entry, admin=True))
+login_button_admin.grid(row=2, columnspan=2, pady=5)
+
+login_status_label = ttk.Label(root, text="")
+login_status_label.grid(row=2, columnspan=2, pady=5)
+
+
+root.mainloop()
